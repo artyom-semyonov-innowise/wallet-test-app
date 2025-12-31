@@ -73,7 +73,7 @@ const WalletApp: React.FC = () => {
       return;
     }
 
-    if (!amount || !currency || !nonce) {
+    if (!amount || !currency || typeof nonce !== 'number') {
       Alert.alert('Error', 'Please fill in all transaction fields');
       return;
     }

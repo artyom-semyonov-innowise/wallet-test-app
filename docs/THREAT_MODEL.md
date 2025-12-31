@@ -1,193 +1,143 @@
 # Threat Model
 
-This document outlines the security threats considered in the mobile wallet implementation and the measures taken to mitigate them.
+Security threats and mitigation measures for the mobile wallet implementation.
 
-## Assets to Protect
+## Assets
 
-1. **Private Key** - The cryptographic private key used to sign transactions
-2. **Transaction Integrity** - Ensuring transactions cannot be tampered with
-3. **Replay Protection** - Preventing the reuse of valid transaction signatures
+1. Private Key - Cryptographic key for transaction signing
+2. Transaction Integrity - Protection against transaction tampering
+3. Replay Protection - Prevention of signature reuse
 
-## Threat Analysis
+## Threats and Mitigations
 
 ### 1. Private Key Compromise
 
-**Threat**: An attacker gains access to the private key, allowing them to sign arbitrary transactions.
-
-**Attack Vectors**:
-- Memory extraction from compromised device
-- JavaScript layer accessing the private key
-- Key storage in insecure locations (SharedPreferences, plain files)
-- Key transmission over network
+**Threat**: Unauthorized access to private key enabling arbitrary transaction signing.
 
 **Mitigation**:
-- ✅ Private key is stored exclusively in Android Keystore
-- ✅ Private key never leaves the secure hardware (if available) or secure enclave
-- ✅ JavaScript layer has no access to private key - only signature is returned
-- ✅ Key operations (signing) performed entirely in native layer
-- ✅ No key material ever transmitted over network
+- Private key stored exclusively in Android Keystore
+- Key never leaves secure hardware/enclave
+- JavaScript layer has no access to private key (only signature returned)
+- All signing operations performed in native layer
+- No key material transmitted over network
 
-**Risk Level**: **LOW** (with proper implementation)
+**Risk Level**: LOW
 
 ---
 
 ### 2. Replay Attacks
 
-**Threat**: An attacker intercepts a valid transaction signature and replays it multiple times to execute the same transaction repeatedly.
-
-**Attack Vectors**:
-- Network interception of signed transaction
-- Malicious backend replaying transactions
-- Client-side signature reuse
+**Threat**: Reuse of intercepted valid transaction signatures.
 
 **Mitigation**:
-- ✅ Nonce-based replay protection:
-  - Each transaction must include a strictly increasing nonce
-  - Last used nonce stored locally (SharedPreferences)
-  - Native layer validates nonce > lastUsedNonce before signing
-  - Backend should also validate nonce (mock backend demonstrates this)
-- ✅ Transaction includes timestamp-like nonce ensuring uniqueness
-- ✅ Failed transactions don't increment nonce (prevents gaps)
+- Strictly increasing nonce per transaction
+- Last used nonce stored in EncryptedSharedPreferences
+- Atomic nonce validation and saving (synchronized) prevents race conditions
+- Native layer validates nonce > lastUsedNonce before signing
+- Backend validates nonce (defense in depth)
 
-**Risk Level**: **LOW** (with proper nonce management)
+**Risk Level**: LOW
 
 ---
 
 ### 3. Transaction Tampering
 
-**Threat**: An attacker modifies transaction data (amount, currency) before or after signing.
-
-**Attack Vectors**:
-- Modifying transaction JSON in JavaScript layer
-- Man-in-the-middle attacks
-- Memory manipulation
+**Threat**: Modification of transaction data before or after signing.
 
 **Mitigation**:
-- ✅ Transaction data is canonicalized before signing (format: `amount|currency|nonce`)
-- ✅ Signature is computed over canonical transaction data in native layer
-- ✅ JavaScript layer cannot modify signed transaction data without invalidating signature
-- ✅ Backend verifies signature before processing (mock shows structure)
+- Canonical transaction format: `amount|currency|nonce`
+- Signature computed over canonical data in native layer
+- Backend verifies signature before processing
+- JavaScript cannot modify signed data without invalidating signature
 
-**Risk Level**: **LOW**
+**Risk Level**: LOW
 
 ---
 
-### 4. Key Invalidation/Deletion
+### 4. Key Invalidation
 
-**Threat**: Key is deleted or becomes inaccessible, preventing transaction signing.
-
-**Attack Vectors**:
-- Factory reset
-- App uninstallation
-- Keystore corruption
-- Device lockout exceeding attempts
+**Threat**: Key deletion or inaccessibility preventing transaction signing.
 
 **Mitigation**:
-- ✅ Error handling for key not found scenarios
-- ✅ Clear error messages to user
-- ✅ Application can detect key existence and prompt for regeneration
-- ✅ User can regenerate key pair if needed
+- Error handling for key not found scenarios
+- Application detects key existence
+- User can regenerate key pair
+- Clear error messages
 
-**Risk Level**: **MEDIUM** (data loss, but not security breach)
+**Risk Level**: MEDIUM (data loss, not security breach)
 
 ---
 
-### 5. Man-in-the-Middle (MITM) Attacks
+### 5. Man-in-the-Middle Attacks
 
-**Threat**: Attacker intercepts and modifies communication between client and backend.
-
-**Attack Vectors**:
-- Network interception
-- Compromised backend
-- SSL/TLS downgrade attacks
+**Threat**: Interception and modification of client-backend communication.
 
 **Mitigation**:
-- ⚠️ **Current Implementation**: Mock backend (no network security)
-- ✅ **Production Requirements**:
-  - HTTPS/TLS 1.3 for all API communication
-  - Certificate pinning
-  - Proper SSL validation
-  - Backend signature verification
+- Current: Mock backend (no network security)
+- Production: HTTPS/TLS 1.3, certificate pinning, proper SSL validation
 
-**Risk Level**: **HIGH** (in current mock, but addressed in production design)
+**Risk Level**: HIGH (current), LOW (production)
 
 ---
 
 ### 6. Side-Channel Attacks
 
-**Threat**: Attacker extracts key information through timing, power consumption, or cache analysis.
-
-**Attack Vectors**:
-- Timing attacks on cryptographic operations
-- Power analysis
-- Cache timing attacks
+**Threat**: Information extraction through timing, power consumption, or cache analysis.
 
 **Mitigation**:
-- ✅ Android Keystore uses hardware-backed security (when available)
-- ✅ Cryptographic operations performed in secure enclave
-- ✅ Constant-time operations in underlying cryptographic libraries
+- Hardware-backed Android Keystore (when available)
+- Cryptographic operations in secure enclave
+- Constant-time operations in underlying libraries
 
-**Risk Level**: **LOW** (hardware-backed keystore mitigates)
+**Risk Level**: LOW
 
 ---
 
 ### 7. Application-Level Attacks
 
-**Threat**: Malicious code execution or privilege escalation in the application.
-
-**Attack Vectors**:
-- Code injection
-- Root/jailbreak access
-- Reverse engineering
+**Threat**: Malicious code execution or privilege escalation.
 
 **Mitigation**:
-- ✅ Private key not accessible even with root access (hardware-backed keystore)
-- ⚠️ Code obfuscation recommended for production
-- ⚠️ Root detection recommended for production
-- ✅ No sensitive data in JavaScript bundle
+- Private key inaccessible even with root access (hardware-backed keystore)
+- No sensitive data in JavaScript bundle
+- Production: Code obfuscation, root detection recommended
 
-**Risk Level**: **MEDIUM** (mitigated by Keystore, but app security should be hardened)
+**Risk Level**: MEDIUM
 
 ---
 
 ### 8. Social Engineering / User Error
 
-**Threat**: User is tricked into signing malicious transactions or leaking credentials.
-
-**Attack Vectors**:
-- Phishing attacks
-- Malicious transaction prompts
-- User confusion
+**Threat**: User tricked into signing malicious transactions.
 
 **Mitigation**:
-- ✅ Clear transaction display before signing
-- ⚠️ **Production**: Add transaction confirmation screens
-- ⚠️ **Production**: Add user authentication (biometrics/PIN) for signing
-- ✅ Nonce prevents accidental duplicate transactions
+- Clear transaction display before signing
+- Production: Transaction confirmation screens, biometric authentication
+- Nonce prevents accidental duplicate transactions
 
-**Risk Level**: **MEDIUM** (requires user education and UI improvements)
+**Risk Level**: MEDIUM
 
 ---
 
 ## Security Assumptions
 
-1. **Device Security**: Assumes device is not completely compromised (rooted/jailbroken detection recommended for production)
-2. **Android Keystore**: Relies on Android Keystore security model
-3. **Backend Trust**: Assumes backend properly validates signatures and nonces (mock demonstrates structure)
-4. **Network Security**: Production must use HTTPS/TLS with proper certificate validation
+1. Device not completely compromised (root detection recommended for production)
+2. Android Keystore security model reliability
+3. Backend properly validates signatures and nonces
+4. Production uses HTTPS/TLS with certificate validation
 
 ## Security Boundaries
 
-- **Secure Boundary**: Android Keystore (native layer)
-- **Unsafe Boundary**: JavaScript layer, network transmission
-- **Trust Boundary**: Backend signature verification
+- **Secure**: Android Keystore (native layer)
+- **Unsafe**: JavaScript layer, network transmission
+- **Trust**: Backend signature verification
 
 ## Residual Risks
 
-1. **Key Recovery**: If device is lost/damaged, private key cannot be recovered (by design, but may be unacceptable for users)
-2. **Key Migration**: No mechanism for key migration between devices
-3. **Multi-device Sync**: Nonce management doesn't support multiple devices (would need backend coordination)
+1. Key loss if device lost/damaged (no recovery mechanism)
+2. No key migration between devices
+3. Single-device nonce management (no multi-device sync)
 
-## Recommendations for Production
+## Production Recommendations
 
-See `PRODUCTION.md` for detailed recommendations on addressing residual risks and enhancing security for production deployment.
+See `PRODUCTION.md` for production security enhancements.

@@ -59,7 +59,12 @@ class WalletModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
                 ?: throw IllegalArgumentException("Transaction must have 'amount' field")
             val currency = transaction.getString("currency")
                 ?: throw IllegalArgumentException("Transaction must have 'currency' field")
-            val nonce = transaction.getDouble("nonce").toLong()
+            
+            val nonceValue = transaction.getDouble("nonce")
+            if (nonceValue.isNaN() || nonceValue < 0) {
+                throw IllegalArgumentException("Invalid nonce value")
+            }
+            val nonce = nonceValue.toLong()
             
             if (amount.isEmpty()) {
                 throw IllegalArgumentException("Amount cannot be empty")
@@ -101,6 +106,8 @@ class WalletModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
         try {
             val nextNonce = transactionSigner.getNextNonce()
             promise.resolve(nextNonce.toDouble())
+        } catch (e: WalletException) {
+            promise.reject("WALLET_ERROR", e.message, e)
         } catch (e: Exception) {
             promise.reject("UNKNOWN_ERROR", "Failed to get next nonce: ${e.message}", e)
         }

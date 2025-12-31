@@ -56,7 +56,7 @@ class MockBackendService {
   } {
     const { transaction, signature, publicKey } = request;
 
-    if (!transaction.amount || !transaction.currency || !transaction.nonce) {
+    if (!transaction.amount || !transaction.currency || typeof transaction.nonce !== 'number') {
       return {
         valid: false,
         error: 'Invalid transaction structure',

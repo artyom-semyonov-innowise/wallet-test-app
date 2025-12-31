@@ -37,6 +37,16 @@ class WalletService {
         );
       }
 
+      const amountValue = parseFloat(transaction.amount);
+      if (isNaN(amountValue) || amountValue <= 0) {
+        throw new Error('Amount must be a positive number');
+      }
+
+      const decimalPlaces = (transaction.amount.split('.')[1] || '').length;
+      if (decimalPlaces > 18) {
+        throw new Error('Amount cannot have more than 18 decimal places');
+      }
+
       return await WalletModule.signTransaction({
         amount: transaction.amount,
         currency: transaction.currency,
