@@ -1,4 +1,5 @@
 import { NativeModules } from 'react-native';
+import ReactNativeBiometrics from 'react-native-biometrics';
 import type { Transaction, GenerateKeyPairResult, WalletError } from './types';
 
 const { WalletModule } = NativeModules;
@@ -11,6 +12,19 @@ if (!WalletModule) {
 class WalletService {
   async generateKeyPair(): Promise<GenerateKeyPairResult> {
     try {
+      const rnBiometrics = new ReactNativeBiometrics();
+
+      const promptMessage = 'Authenticate to generate key pair';
+      const { success } = await rnBiometrics.simplePrompt({
+        promptMessage,
+        fallbackPromptMessage: 'Use device PIN or password',
+        cancelButtonText: 'Cancel',
+      });
+
+      if (!success) {
+        throw new Error('Authentication cancelled or failed');
+      }
+
       return await WalletModule.generateKeyPair();
     } catch (error: any) {
       throw this.createWalletError(error);
@@ -45,6 +59,19 @@ class WalletService {
       const decimalPlaces = (transaction.amount.split('.')[1] || '').length;
       if (decimalPlaces > 18) {
         throw new Error('Amount cannot have more than 18 decimal places');
+      }
+
+      const rnBiometrics = new ReactNativeBiometrics();
+
+      const promptMessage = `Authenticate to sign transaction\nAmount: ${transaction.amount} ${transaction.currency}`;
+      const { success } = await rnBiometrics.simplePrompt({
+        promptMessage,
+        fallbackPromptMessage: 'Use device PIN or password',
+        cancelButtonText: 'Cancel',
+      });
+
+      if (!success) {
+        throw new Error('Authentication cancelled or failed');
       }
 
       return await WalletModule.signTransaction({
